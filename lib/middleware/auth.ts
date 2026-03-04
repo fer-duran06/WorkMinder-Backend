@@ -33,7 +33,7 @@ export async function verifyAuth(request: NextRequest): Promise<string> {
 export function generateToken(userId: string, email: string): string {
   return jwt.sign(
     { userId, email },
-    process.env.JWT_SECRET || 'default_secret',
-    { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    process.env.JWT_SECRET as string,
+    { expiresIn: '7d' }
   );
 }
