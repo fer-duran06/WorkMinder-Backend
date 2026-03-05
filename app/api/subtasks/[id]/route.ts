@@ -1,43 +1,62 @@
-// app/api/subtasks/[id]/route.ts
-import { NextRequest, NextResponse } from 'next/server';
-import { verifyAuth } from '@/lib/middleware/auth';
-import { db } from '@/lib/db/mysql';
+import { NextRequest, NextResponse } from 'next/server'
+import { verifyAuth } from '@/lib/middleware/auth'
+import { supabase } from '@/lib/supabase/client'
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const userId = await verifyAuth(request);
-    const { id } = await params;  
+    const userId = await verifyAuth(request)
+    const { id } = await params
 
-    const subtareas = await db.query<any>(
-      `SELECT s.id, s.esta_completada 
-       FROM subtareas s
-       INNER JOIN tareas t ON s.tarea_id = t.id
-       WHERE s.id = ? AND t.usuario_id = ?`,
-      [id, userId]
-    );
+    // Verificar que la subtarea pertenece al usuario via la tarea padre
+    const { data: subtask } = await supabase
+      .from('subtasks')
+      .select('subtask_id, is_completed, task_id')
+      .eq('subtask_id', id)
+      .single()
 
-    if (!subtareas.length) {
-      return NextResponse.json({ success: false, error: 'Subtarea no encontrada' }, { status: 404 });
+    if (!subtask) {
+      return NextResponse.json(
+        { success: false, error: 'Subtarea no encontrada' },
+        { status: 404 }
+      )
     }
 
-    const nuevoEstado = !subtareas[0].esta_completada;
+    // Verificar que la tarea padre pertenece al usuario
+    const { data: task } = await supabase
+      .from('tasks')
+      .select('id')
+      .eq('id', subtask.task_id)
+      .eq('user_id', userId)
+      .single()
 
-    await db.execute(
-      'UPDATE subtareas SET esta_completada = ? WHERE id = ?',
-      [nuevoEstado, id]
-    );
+    if (!task) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
 
-    return NextResponse.json({ success: true, data: { id, esta_completada: nuevoEstado } });
+    // Toggle: si está completada la desmarca, si no la marca
+    const { data: updated, error } = await supabase
+      .from('subtasks')
+      .update({ is_completed: !subtask.is_completed })
+      .eq('subtask_id', id)
+      .select()
+      .single()
+
+    if (error) throw new Error(error.message)
+
+    return NextResponse.json({ success: true, data: updated })
 
   } catch (error: any) {
-    const isAuthError = error.message.includes('Token') || error.message.includes('autenticación');
+    const isAuthError = error.message.includes('Token')
     return NextResponse.json(
       { success: false, error: error.message },
       { status: isAuthError ? 401 : 500 }
-    );
+    )
   }
 }
 
@@ -46,30 +65,51 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const userId = await verifyAuth(request);
-    const { id } = await params;  
+    const userId = await verifyAuth(request)
+    const { id } = await params
 
-    const subtareas = await db.query<any>(
-      `SELECT s.id 
-       FROM subtareas s
-       INNER JOIN tareas t ON s.tarea_id = t.id
-       WHERE s.id = ? AND t.usuario_id = ?`,
-      [id, userId]
-    );
+    // Verificar propiedad via tarea padre
+    const { data: subtask } = await supabase
+      .from('subtasks')
+      .select('subtask_id, task_id')
+      .eq('subtask_id', id)
+      .single()
 
-    if (!subtareas.length) {
-      return NextResponse.json({ success: false, error: 'Subtarea no encontrada' }, { status: 404 });
+    if (!subtask) {
+      return NextResponse.json(
+        { success: false, error: 'Subtarea no encontrada' },
+        { status: 404 }
+      )
     }
 
-    await db.execute('DELETE FROM subtareas WHERE id = ?', [id]);
+    const { data: task } = await supabase
+      .from('tasks')
+      .select('id')
+      .eq('id', subtask.task_id)
+      .eq('user_id', userId)
+      .single()
 
-    return NextResponse.json({ success: true, message: 'Subtarea eliminada correctamente' });
+    if (!task) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+
+    const { error } = await supabase
+      .from('subtasks')
+      .delete()
+      .eq('subtask_id', id)
+
+    if (error) throw new Error(error.message)
+
+    return NextResponse.json({ success: true, message: 'Subtarea eliminada' })
 
   } catch (error: any) {
-    const isAuthError = error.message.includes('Token') || error.message.includes('autenticación');
+    const isAuthError = error.message.includes('Token')
     return NextResponse.json(
       { success: false, error: error.message },
       { status: isAuthError ? 401 : 500 }
-    );
+    )
   }
 }
