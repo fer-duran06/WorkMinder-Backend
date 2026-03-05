@@ -1,32 +1,34 @@
-// app/api/tasks/[id]/route.ts
-import { NextRequest, NextResponse } from 'next/server';
-import { TasksService } from '@/services/TasksService';
-import { verifyAuth } from '@/lib/middleware/auth';
+import { NextRequest, NextResponse } from 'next/server'
+import { verifyAuth } from '@/lib/middleware/auth'
+import { TasksService } from '@/services/TasksService'
+import { z } from 'zod'
+
+const updateTaskSchema = z.object({
+  task_title: z.string().min(1).max(200).optional(),
+  extra_note: z.string().max(1000).optional(),
+  due_date: z.string().optional(),
+  importance: z.number().int().min(1).max(5).optional(),
+  complexity: z.number().int().min(1).max(5).optional(),
+  subject_id: z.string().uuid().optional(),
+  task_status: z.string().optional()
+})
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const userId = await verifyAuth(request);
-    const { id: taskId } = await params;
-
-    const task = await TasksService.getTaskById(userId, taskId);
-
-    if (!task) {
-      return NextResponse.json({
-        success: false,
-        error: 'Tarea no encontrada'
-      }, { status: 404 });
-    }
-
-    return NextResponse.json({ success: true, data: task });
+    const userId = await verifyAuth(request)
+    const { id } = await params
+    const task = await TasksService.getById(id, userId)
+    return NextResponse.json({ success: true, data: task })
 
   } catch (error: any) {
-    return NextResponse.json({
-      success: false,
-      error: error.message
-    }, { status: 401 });
+    const isAuthError = error.message.includes('Token')
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: isAuthError ? 401 : 500 }
+    )
   }
 }
 
@@ -35,19 +37,27 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const userId = await verifyAuth(request);
-    const { id: taskId } = await params;
-    const body = await request.json();
+    const userId = await verifyAuth(request)
+    const { id } = await params
+    const body = await request.json()
+    const validation = updateTaskSchema.safeParse(body)
 
-    const task = await TasksService.updateTask(userId, taskId, body);
+    if (!validation.success) {
+      return NextResponse.json(
+        { success: false, error: validation.error.issues[0]?.message },
+        { status: 400 }
+      )
+    }
 
-    return NextResponse.json({ success: true, data: task });
+    const task = await TasksService.update(id, userId, validation.data)
+    return NextResponse.json({ success: true, data: task })
 
   } catch (error: any) {
-    return NextResponse.json({
-      success: false,
-      error: error.message
-    }, { status: error.message === 'Tarea no encontrada' ? 404 : 400 });
+    const isAuthError = error.message.includes('Token')
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: isAuthError ? 401 : 500 }
+    )
   }
 }
 
@@ -56,20 +66,16 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const userId = await verifyAuth(request);
-    const { id: taskId } = await params;
-
-    await TasksService.deleteTask(userId, taskId);
-
-    return NextResponse.json({
-      success: true,
-      message: 'Tarea eliminada correctamente'
-    });
+    const userId = await verifyAuth(request)
+    const { id } = await params
+    await TasksService.delete(id, userId)
+    return NextResponse.json({ success: true, message: 'Tarea eliminada' })
 
   } catch (error: any) {
-    return NextResponse.json({
-      success: false,
-      error: error.message
-    }, { status: error.message === 'Tarea no encontrada' ? 404 : 400 });
+    const isAuthError = error.message.includes('Token')
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: isAuthError ? 401 : 500 }
+    )
   }
 }

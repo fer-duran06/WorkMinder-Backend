@@ -1,44 +1,50 @@
-// app/api/tasks/[id]/subtasks/route.ts
-import { NextRequest, NextResponse } from 'next/server';
-import { verifyAuth } from '@/lib/middleware/auth';
-import { db } from '@/lib/db/mysql';
-import { z } from 'zod';
+import { NextRequest, NextResponse } from 'next/server'
+import { verifyAuth } from '@/lib/middleware/auth'
+import { supabase } from '@/lib/supabase/client'
+import { z } from 'zod'
 
 const createSubtaskSchema = z.object({
-  titulo: z.string().min(1).max(200),
-  indice_orden: z.number().int().optional()
-});
+  subtask_name: z.string().min(1, 'El nombre es requerido').max(200)
+})
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const userId = await verifyAuth(request);
-    const { id: tareaId } = await params;  // ← await aquí
+    const userId = await verifyAuth(request)
+    const { id: taskId } = await params
 
-    const tareas = await db.query<any>(
-      'SELECT id FROM tareas WHERE id = ? AND usuario_id = ?',
-      [tareaId, userId]
-    );
+    // Verificar que la tarea pertenece al usuario
+    const { data: task } = await supabase
+      .from('tasks')
+      .select('id')
+      .eq('id', taskId)
+      .eq('user_id', userId)
+      .single()
 
-    if (!tareas.length) {
-      return NextResponse.json({ success: false, error: 'Tarea no encontrada' }, { status: 404 });
+    if (!task) {
+      return NextResponse.json(
+        { success: false, error: 'Tarea no encontrada' },
+        { status: 404 }
+      )
     }
 
-    const subtareas = await db.query<any>(
-      'SELECT * FROM subtareas WHERE tarea_id = ? ORDER BY indice_orden',
-      [tareaId]
-    );
+    const { data: subtasks, error } = await supabase
+      .from('subtasks')
+      .select('*')
+      .eq('task_id', taskId)
 
-    return NextResponse.json({ success: true, data: subtareas });
+    if (error) throw new Error(error.message)
+
+    return NextResponse.json({ success: true, data: subtasks })
 
   } catch (error: any) {
-    const isAuthError = error.message.includes('Token') || error.message.includes('autenticación');
+    const isAuthError = error.message.includes('Token')
     return NextResponse.json(
       { success: false, error: error.message },
       { status: isAuthError ? 401 : 500 }
-    );
+    )
   }
 }
 
@@ -47,48 +53,53 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const userId = await verifyAuth(request);
-    const { id: tareaId } = await params;  
+    const userId = await verifyAuth(request)
+    const { id: taskId } = await params
 
-    const tareas = await db.query<any>(
-      'SELECT id FROM tareas WHERE id = ? AND usuario_id = ?',
-      [tareaId, userId]
-    );
-
-    if (!tareas.length) {
-      return NextResponse.json({ success: false, error: 'Tarea no encontrada' }, { status: 404 });
-    }
-
-    const body = await request.json();
-    const validation = createSubtaskSchema.safeParse(body);
+    const body = await request.json()
+    const validation = createSubtaskSchema.safeParse(body)
 
     if (!validation.success) {
       return NextResponse.json(
         { success: false, error: validation.error.issues[0]?.message },
         { status: 400 }
-      );
+      )
     }
 
-    const { titulo, indice_orden = 0 } = validation.data;
+    // Verificar que la tarea pertenece al usuario
+    const { data: task } = await supabase
+      .from('tasks')
+      .select('id')
+      .eq('id', taskId)
+      .eq('user_id', userId)
+      .single()
 
-    await db.execute(
-      `INSERT INTO subtareas (id, tarea_id, titulo, indice_orden)
-       VALUES (UUID(), ?, ?, ?)`,
-      [tareaId, titulo, indice_orden]
-    );
+    if (!task) {
+      return NextResponse.json(
+        { success: false, error: 'Tarea no encontrada' },
+        { status: 404 }
+      )
+    }
 
-    const subtareas = await db.query<any>(
-      'SELECT * FROM subtareas WHERE tarea_id = ? ORDER BY indice_orden',
-      [tareaId]
-    );
+    const { data: subtask, error } = await supabase
+      .from('subtasks')
+      .insert({
+        task_id: taskId,
+        subtask_name: validation.data.subtask_name,
+        is_completed: false
+      })
+      .select()
+      .single()
 
-    return NextResponse.json({ success: true, data: subtareas }, { status: 201 });
+    if (error) throw new Error(error.message)
+
+    return NextResponse.json({ success: true, data: subtask }, { status: 201 })
 
   } catch (error: any) {
-    const isAuthError = error.message.includes('Token') || error.message.includes('autenticación');
+    const isAuthError = error.message.includes('Token')
     return NextResponse.json(
       { success: false, error: error.message },
       { status: isAuthError ? 401 : 500 }
-    );
+    )
   }
 }

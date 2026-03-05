@@ -1,67 +1,59 @@
-// app/api/tasks/route.ts
-import { NextRequest, NextResponse } from 'next/server';
-import { TasksService } from '@/services/TasksService';
-import { verifyAuth } from '@/lib/middleware/auth';
+import { NextRequest, NextResponse } from 'next/server'
+import { verifyAuth } from '@/lib/middleware/auth'
+import { TasksService } from '@/services/TasksService'
+import { z } from 'zod'
 
-/**
- * GET /api/tasks
- * Obtener todas las tareas del usuario
- */
+const createTaskSchema = z.object({
+  task_title: z.string().min(1, 'El título es requerido').max(200),
+  extra_note: z.string().max(1000).optional(),
+  due_date: z.string().min(1, 'La fecha de entrega es requerida'),
+  importance: z.number().int().min(1).max(5).optional(),
+  complexity: z.number().int().min(1).max(5).optional(),
+  subject_id: z.string().uuid().optional()
+})
+
 export async function GET(request: NextRequest) {
   try {
-    const userId = await verifyAuth(request);
+    const userId = await verifyAuth(request)
+    const { searchParams } = new URL(request.url)
+    const prioritized = searchParams.get('prioritized')
 
-    // Obtener parámetros de query
-    const { searchParams } = new URL(request.url);
-    const estado = searchParams.get('estado') || undefined;
-    const materiaId = searchParams.get('materia_id') || undefined;
+    const tasks = prioritized
+      ? await TasksService.getPrioritized(userId)
+      : await TasksService.getAll(userId)
 
-    const tasks = await TasksService.getTasks(userId, {
-      estado,
-      materiaId
-    });
-
-    return NextResponse.json({
-      success: true,
-      data: tasks
-    });
+    return NextResponse.json({ success: true, data: tasks })
 
   } catch (error: any) {
-    return NextResponse.json({
-      success: false,
-      error: error.message
-    }, { status: error.message === 'Token inválido o expirado' ? 401 : 500 });
+    const isAuthError = error.message.includes('Token')
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: isAuthError ? 401 : 500 }
+    )
   }
 }
 
-/**
- * POST /api/tasks
- * Crear nueva tarea
- */
 export async function POST(request: NextRequest) {
   try {
-    const userId = await verifyAuth(request);
-    const body = await request.json();
+    const userId = await verifyAuth(request)
+    const body = await request.json()
+    const validation = createTaskSchema.safeParse(body)
 
-    // Validación básica
-    if (!body.titulo || !body.fecha_entrega || !body.peso_calificacion) {
-      return NextResponse.json({
-        success: false,
-        error: 'Faltan campos requeridos: titulo, fecha_entrega, peso_calificacion'
-      }, { status: 400 });
+    if (!validation.success) {
+      return NextResponse.json(
+        { success: false, error: validation.error.issues[0]?.message },
+        { status: 400 }
+      )
     }
 
-    const task = await TasksService.createTask(userId, body);
-
-    return NextResponse.json({
-      success: true,
-      data: task
-    }, { status: 201 });
+    const task = await TasksService.create(userId, validation.data)
+    return NextResponse.json({ success: true, data: task }, { status: 201 })
 
   } catch (error: any) {
-    return NextResponse.json({
-      success: false,
-      error: error.message
-    }, { status: error.message === 'Token inválido o expirado' ? 401 : 400 });
+    const isAuthError = error.message.includes('Token')
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: isAuthError ? 401 : 500 }
+    )
   }
 }

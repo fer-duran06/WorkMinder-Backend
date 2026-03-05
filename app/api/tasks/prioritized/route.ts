@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   try {
     const userId = await verifyAuth(request);
 
-    const tasks = await TasksService.getPrioritizedTasks(userId);
+    const tasks = await TasksService.getPrioritized(userId);
 
     return NextResponse.json({
       success: true,
