@@ -60,13 +60,23 @@ export class SubjectsService {
   }
 
   static async delete(id: string, userId: string) {
-    const { error } = await supabase
-      .from('subjects')
-      .delete()
-      .eq('id', id)
-      .eq('user_id', userId)
+  // Primero desasociar todas las tareas de esta materia → "Sin materia"
+  const { error: updateError } = await supabase
+    .from('tasks')
+    .update({ subject_id: null })
+    .eq('subject_id', id)
+    .eq('user_id', userId)
 
-    if (error) throw new Error(error.message)
-    return true
-  }
+  if (updateError) throw new Error(updateError.message)
+
+  // Luego eliminar la materia
+  const { error } = await supabase
+    .from('subjects')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', userId)
+
+  if (error) throw new Error(error.message)
+  return true
+}
 }
