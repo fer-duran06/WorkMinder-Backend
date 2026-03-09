@@ -37,17 +37,17 @@ export type Database = {
       }
       reminders: {
         Row: {
-          days_advance: number
+          reminder_datetime: string
           reminder_id: string
           task_id: string
         }
         Insert: {
-          days_advance: number
+          reminder_datetime: string
           reminder_id?: string
           task_id: string
         }
         Update: {
-          days_advance?: number
+          reminder_datetime?: string
           reminder_id?: string
           task_id?: string
         }
