@@ -11,12 +11,10 @@ const updateTaskSchema = z.object({
   complexity: z.number().int().min(1).max(5).optional(),
   subject_id: z.string().uuid().optional(),
   task_status: z.enum([
-    'Pendiente',
-    'Empezada',
-    'En Progreso',
-    'Avanzada',
-    'Completada'
-  ]).optional()
+  'Pendiente',
+  'Completada',
+  'Atrasada'
+]).optional()
 })
 
 export async function GET(

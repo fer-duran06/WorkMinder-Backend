@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
       data: tasks,
       meta: {
         total: tasks.length,
-        algorithm: 'P(t) = 0.6·I(t) + 0.4·U(t)'
+        algorithm: 'Urgencia = ((Importancia * 3) + (Complejidad * 2)) / (Días para la entrega + 1)'
       }
     });
 
