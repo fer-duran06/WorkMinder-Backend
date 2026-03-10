@@ -19,5 +19,6 @@ export async function verifyAuth(request: NextRequest): Promise<string> {
     throw new Error('Token inválido o expirado')
   }
 
+  console.log(`[verifyAuth] Token verificado. UserID: ${user.id}`)
   return user.id // UUID del usuario autenticado
 }

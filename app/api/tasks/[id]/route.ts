@@ -5,16 +5,16 @@ import { z } from 'zod'
 
 const updateTaskSchema = z.object({
   task_title: z.string().min(1).max(200).optional(),
-  extra_note: z.string().max(1000).optional(),
+  extra_note: z.string().max(1000).optional().nullable(),
   due_date: z.string().optional(),
-  importance: z.number().int().min(1).max(5).optional(),
-  complexity: z.number().int().min(1).max(5).optional(),
-  subject_id: z.string().uuid().optional(),
+  importance: z.preprocess((val) => (val === '' ? undefined : (val === null ? null : Number(val))), z.number().int().min(1).max(5).optional().nullable()),
+  complexity: z.preprocess((val) => (val === '' ? undefined : (val === null ? null : Number(val))), z.number().int().min(1).max(5).optional().nullable()),
+  subject_id: z.preprocess((val) => (val === '' ? undefined : val), z.string().uuid().optional().nullable()),
   task_status: z.enum([
-  'Pendiente',
-  'Completada',
-  'Atrasada'
-]).optional()
+    'Pendiente',
+    'Completada',
+    'Atrasada'
+  ]).optional()
 })
 
 export async function GET(
@@ -44,6 +44,8 @@ export async function PUT(
     const userId = await verifyAuth(request)
     const { id } = await params
     const body = await request.json()
+    console.log(`[PUT /api/tasks/${id}] User: ${userId}, Body:`, body)
+
     const validation = updateTaskSchema.safeParse(body)
 
     if (!validation.success) {

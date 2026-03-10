@@ -54,11 +54,11 @@ export class TasksService {
 
   static async create(userId: string, data: {
     task_title: string
-    extra_note?: string
+    extra_note?: string | null
     due_date: string
     importance?: number
     complexity?: number
-    subject_id?: string
+    subject_id?: string | null
   }) {
     const importance = data.importance ?? 3
     const complexity = data.complexity ?? 3
@@ -87,11 +87,11 @@ export class TasksService {
 
   static async update(id: string, userId: string, data: {
     task_title?: string
-    extra_note?: string
+    extra_note?: string | null
     due_date?: string
-    importance?: number
-    complexity?: number
-    subject_id?: string
+    importance?: number | null
+    complexity?: number | null
+    subject_id?: string | null
     task_status?: string
   }) {
     // Recalcular urgencia si cambian campos que la afectan
